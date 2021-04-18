@@ -21,9 +21,12 @@ class Months(IntEnum):
 
 
 def get_date_taken(file_path):
-    image_data = PIL.Image.open(file_path)
-    data = image_data._getexif()
-    return data[36867]
+    try:
+        image_data = PIL.Image.open(file_path)
+        data = image_data._getexif()
+        return data[36867]
+    except Exception:
+        print(f"Cannot Process file : {file_path}")
 
 
 def get_folder_tree(path, list_of_files):
