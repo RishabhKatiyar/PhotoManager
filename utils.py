@@ -36,6 +36,9 @@ def get_folder_tree(path, list_of_files):
 
     for file_name in list_of_files:
         date_taken = get_date_taken(os.path.join(path, file_name))
+        if date_taken is None:
+            print(f"Cannot Process file : {file_name}")
+            continue
         full_date = date_taken.split(sep=" ")[0]
         _year = int(full_date.split(sep=":")[0])
         _month = int(full_date.split(sep=":")[1])
