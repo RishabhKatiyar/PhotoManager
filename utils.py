@@ -104,7 +104,7 @@ def create_folders_and_copy_files(folder_tree, source_path, destination_path):
                 shutil.copy(os.path.join(source_path, day_file_pair.filename), file_path)
 
 
-def get_folder_tree_for_videos(path, list_of_files):
+def get_folder_tree_with_name(path, list_of_files):
     """populating the data structure which holds folder structure metadata"""
     folder_tree = {}
     DayFilePair = namedtuple('DayFilePair', ['day', 'filename'])
