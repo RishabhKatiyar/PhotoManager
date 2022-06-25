@@ -80,7 +80,7 @@ func main() {
 			var list_of_files []string
 			log.Debug().Msg("Reading Photos..")
 			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-				if filepath.Ext(path) == ".jpg" {
+				if filepath.Ext(path) == ".jpg" || filepath.Ext(path) == ".JPG"  {
 					list_of_files = append(list_of_files, path)
 				}
 				return nil
@@ -106,7 +106,7 @@ func main() {
 			var list_of_files []string
 			log.Debug().Msg("Reading Videos..")
 			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-				if filepath.Ext(path) == ".mp4" {
+				if filepath.Ext(path) == ".mp4" || filepath.Ext(path) == ".MP4" {
 					list_of_files = append(list_of_files, path)
 				}
 				return nil
