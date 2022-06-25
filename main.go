@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,14 +14,22 @@ import (
 )
 
 var (
-	source_path      = "D:\\dumpSource"
-	destination_path = "D:\\dumpDest"
+	//source_path      = "D:\\dumpSource"
+	source_path      = ""
+	//destination_path = "D:\\dumpDest"
+	destination_path = ""
 
 	process_photos = true
 	process_videos = true
 )
 
 func main() {
+	fmt.Println("Enter Source Path")
+    fmt.Scanln(&source_path)
+
+	fmt.Println("Enter Destination Path")
+    fmt.Scanln(&destination_path)
+	
 	start := time.Now()
 	// UNIX Time is faster and smaller than most timestamps
 	//zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -112,4 +121,8 @@ func main() {
 	}
 
 	log.Debug().Msgf("Time Taken = %v", time.Since(start))
+
+	fmt.Println("You can exit application now..")
+	exitInput := ""
+	fmt.Scanln(&exitInput)
 }
