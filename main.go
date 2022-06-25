@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 	"errors"
+	"sync"
 
 	"github.com/RishabhKatiyar/PhotoManager/utils"
 	"github.com/rs/zerolog"
@@ -24,6 +25,7 @@ var (
 )
 
 func main() {
+	
 	fmt.Println("Enter Source Path")
     fmt.Scanln(&source_path)
 
@@ -62,15 +64,15 @@ func main() {
 	// Log a human-friendly, colorized output
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	
-	util_object := utils.Utils{Destination_path: destination_path}
+	// wait for all go routines to complete
+	var wg sync.WaitGroup
+
+	util_object := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
 
 	// Photos
 	if process_photos {
 		var list_of_files []string
-		
 		log.Debug().Msg("Processing photos with date metadata")
-		
 		err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
 			if filepath.Ext(path) == ".jpg" {
 				list_of_files = append(list_of_files, path)
@@ -82,12 +84,12 @@ func main() {
 			log.Error().Stack().Err(err).Msg("")
 		}
 
-		util_object.Get_folder_tree(list_of_files)
+		util_object.Create_folder_tree(list_of_files)
 		util_object.Create_folders_and_copy_files(false)
 
 		if len(util_object.Failed_files) > 0 {
 			log.Debug().Msg("Processing photos with file name")
-			util_object.Get_folder_tree_with_name(util_object.Failed_files)
+			util_object.Create_folder_tree_with_name(util_object.Failed_files)
 			util_object.Create_folders_and_copy_files(false)
 		}
 	}
@@ -104,11 +106,11 @@ func main() {
 		})
 		
 		if err != nil {
-			panic(err)
+			log.Error().Stack().Err(err).Msg("")
 		}
 
 		log.Debug().Msg("Processing videos with file name")
-		util_object.Get_folder_tree_with_name(list_of_files)
+		util_object.Create_folder_tree_with_name(list_of_files)
 		util_object.Create_folders_and_copy_files(true)
 	}
 
@@ -119,6 +121,13 @@ func main() {
 	} else {
 		log.Debug().Msg("Success!")
 	}
+	
+	//
+	// wait here till all copying go routines have completed
+	//
+	fmt.Printf("\n\nWait till copying of files is in progress..\n\n")
+	wg.Wait()
+
 
 	log.Debug().Msgf("Time Taken = %v", time.Since(start))
 
