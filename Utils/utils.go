@@ -71,6 +71,12 @@ type Utils struct {
 	WaitGroupVar 		*sync.WaitGroup                   
 }
 
+func (u *Utils) InValidDate(year, month, day int) bool {
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	y, m, d := t.Date()
+	return y != year || int(m) != month || d != day
+}
+
 func (u *Utils) get_date_taken_from_exif(file_path string) (int, int, int, error) {
 	year, month, day := 0, 0, 0
 	f, err := os.Open(file_path)
@@ -100,11 +106,28 @@ func (u *Utils) get_date_taken_from_file_name(file_name string) (int, int, int, 
 	if idx < 0 {
 		idx = strings.Index(fileBaseName, "_")
 	}
-	if idx > 0 {
+	if idx == 3 {
 		year, _ = strconv.Atoi(fileBaseName[idx+1 : idx+5])
 		month, _ = strconv.Atoi(fileBaseName[idx+5 : idx+7])
 		day, _ = strconv.Atoi(fileBaseName[idx+7 : idx+9])
 	} else {
+		year, err = strconv.Atoi(fileBaseName[0 : 4])
+		if err != nil {
+			err = errors.New("Cannot get date taken from file name")
+		} else {
+			month, err = strconv.Atoi(fileBaseName[4 : 6])
+			if err != nil {
+				err = errors.New("Cannot get date taken from file name")
+			} else {
+				day, err = strconv.Atoi(fileBaseName[6 : 8])
+				if err != nil {
+					err = errors.New("Cannot get date taken from file name")
+				}
+			}
+		}
+	}
+
+	if u.InValidDate(year, month, day) {
 		err = errors.New("Cannot get date taken from file name")
 	}
 	
@@ -188,7 +211,7 @@ func (u *Utils) Create_folders_and_copy_files(videos bool, start_time time.Time)
 	defer func() {
 		log.Debug().Msgf("Time Elapsed in copying files is %v", time.Since(start_time))
 	}()
-	
+
 	destination_path := u.Destination_path
 
 	for year_key, months := range u.Folder_tree {
@@ -212,6 +235,8 @@ func (u *Utils) Create_folders_and_copy_files(videos bool, start_time time.Time)
 				
 				if videos {
 					file_path = filepath.Join(file_path, "Videos")
+				} else {
+					file_path = filepath.Join(file_path, "Photos")
 				}
 				
 				u.WaitGroupVar.Add(1)
