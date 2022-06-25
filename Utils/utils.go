@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
@@ -67,101 +67,108 @@ func (e Months) String() string {
 type Utils struct {
 	Destination_path	string
 	Folder_tree        	map[int]map[int]map[int][]string	
-	Failed_files 		[]string
 	Fatal_files 		[]string   
 	WaitGroupVar 		*sync.WaitGroup                   
 }
 
-func (u *Utils) get_date_taken(file_path string) (time.Time, error) {
+func (u *Utils) get_date_taken_from_exif(file_path string) (int, int, int, error) {
+	year, month, day := 0, 0, 0
 	f, err := os.Open(file_path)
 	if err != nil {
-			return time.Now(), err
+			return year, month, day, err
 		}
 	exif.RegisterParsers(mknote.All...)
 
 	x, err := exif.Decode(f)
 	if err != nil {
-			return time.Now(), err
+			return year, month, day, err
 		}
 
-	tm, err := x.DateTime()
+	date_taken, err := x.DateTime()
+	year = date_taken.Year()
+	month = int(date_taken.Month())
+	day = date_taken.Day()
 
-	return tm, err
+	return year, month, day, err
+}
+
+func (u *Utils) get_date_taken_from_file_name(file_name string) (int, int, int, error) {
+	year, month, day := 0, 0, 0
+	var err error
+	fileBaseName := filepath.Base(file_name)
+	idx := strings.Index(fileBaseName, "-")
+	if idx < 0 {
+		idx = strings.Index(fileBaseName, "_")
+	}
+	if idx > 0 {
+		year, _ = strconv.Atoi(fileBaseName[idx+1 : idx+5])
+		month, _ = strconv.Atoi(fileBaseName[idx+5 : idx+7])
+		day, _ = strconv.Atoi(fileBaseName[idx+7 : idx+9])
+	} else {
+		err = errors.New("Cannot get date taken from file name")
 	}
 	
+	return year, month, day, err
+}
+	
 /*
-populating the data structure which holds folder structure metadata
+populate the data structure which holds folder tree metadata
 */
-func (u *Utils) Create_folder_tree(list_of_files []string) error {
+func (u *Utils) Create_folder_tree(list_of_files []string, calculate_date_taken_from_file_name bool, start_time time.Time) error {
+	defer func() {
+		log.Debug().Msgf("Time Elapsed in creating folder tree is %v", time.Since(start_time))
+	}()
+
 	folder_tree := make(map[int]map[int]map[int][]string)
 	
 	for _, file_name := range list_of_files {
-		date_taken, err := u.get_date_taken(filepath.Join(file_name))
-		if err != nil {
-			log.Error().Stack().Err(err).Msgf("Cannot Process file %s because date taken not found in exif, queueing them to process by name", file_name)
-			u.Failed_files = append(u.Failed_files, file_name)
-			continue
+		year, month, day := 0, 0, 0
+		var err error
+		if calculate_date_taken_from_file_name {
+			year, month, day, err = u.get_date_taken_from_file_name(file_name)
+			if err != nil {			
+				log.Error().Stack().Err(err).Msgf("Date time not present in file name %s, queueing them to fatal files list", file_name)
+				u.Fatal_files = append(u.Fatal_files, file_name)
+				continue
+			}		
+		} else {
+			year, month, day, err = u.get_date_taken_from_exif(filepath.Join(file_name))
+			if err != nil {
+				log.Error().Stack().Err(err).Msgf("Date taken not found in exif for file %s, trying with file name", file_name)
+				year, month, day, err = u.get_date_taken_from_file_name(file_name)
+				if err != nil {			
+					log.Error().Stack().Err(err).Msgf("Date time not present in file name %s, queueing them to fatal files list", file_name)
+					u.Fatal_files = append(u.Fatal_files, file_name)
+					continue
+				}
+			}
 		}
-		year := date_taken.Year()
-		month := date_taken.Month()
-		day := date_taken.Day()
 
-		if _, found := folder_tree[year][int(month)][day]; found {
-			folder_tree[year][int(month)][day] = append(folder_tree[year][int(month)][day], file_name)
+		if _, found := folder_tree[year][month][day]; found {
+			folder_tree[year][month][day] = append(folder_tree[year][month][day], file_name)
 		} else {
 			if _, found := folder_tree[year]; !found {
 				folder_tree[year] = make(map[int]map[int][]string)
 			}
-			if _, found := folder_tree[year][int(month)]; !found {
-				folder_tree[year][int(month)] = make(map[int][]string)
+			if _, found := folder_tree[year][month]; !found {
+				folder_tree[year][month] = make(map[int][]string)
 			}
-			folder_tree[year][int(month)][day] = make([]string, 0)
-			folder_tree[year][int(month)][day] = append(folder_tree[year][int(month)][day], file_name)
+			folder_tree[year][month][day] = make([]string, 0)
+			folder_tree[year][month][day] = append(folder_tree[year][month][day], file_name)
 		}
 	}
 	u.Folder_tree = folder_tree
-	return nil
-}
-
-func (u *Utils) Create_folder_tree_with_name(list_of_files []string) error {
-	folder_tree := make(map[int]map[int]map[int][]string)
-
-	for _, file_name := range list_of_files {
-		fileBaseName := filepath.Base(file_name)
-	
-		idx := strings.Index(fileBaseName, "-")
-		if idx < 0 {
-			idx = strings.Index(fileBaseName, "_")
-		}
-		if idx > 0 {
-			year, _ := strconv.Atoi(fileBaseName[idx+1 : idx+5])
-			month, _ := strconv.Atoi(fileBaseName[idx+5 : idx+7])
-			day, _ := strconv.Atoi(fileBaseName[idx+7 : idx+9])
-						
-		if _, found := folder_tree[year][int(month)][day]; found {
-				folder_tree[year][int(month)][day] = append(folder_tree[year][int(month)][day], file_name)
-		} else {
-				if _, found := folder_tree[year]; !found {
-					folder_tree[year] = make(map[int]map[int][]string)
-				}
-				if _, found := folder_tree[year][int(month)]; !found {
-					folder_tree[year][int(month)] = make(map[int][]string)
-				}
-				folder_tree[year][int(month)][day] = make([]string, 0)
-				folder_tree[year][int(month)][day] = append(folder_tree[year][int(month)][day], file_name)
-			}
-		} else {
-			err := errors.New("Cannot Process file")
-			log.Error().Stack().Err(err).Msgf("Date time not present in file name %s, queueing them to fatal files list", file_name)
-			u.Fatal_files = append(u.Fatal_files, file_name)
-		}
-	}
-	u.Folder_tree = folder_tree
+	log.Debug().Msg("Folder Tree Generated")
 	return nil
 }
 
 func (u *Utils) Copy_files(file_list []string, file_path string) {
 	defer u.WaitGroupVar.Done()
+
+	if _, err := os.Stat(file_path); os.IsNotExist(err) {
+		os.MkdirAll(file_path, os.ModeDir)
+	}
+
 	for _, fileName := range file_list {
 		// copy the file to created or existing folder
 		dest := filepath.Join(file_path, filepath.Base(fileName))
@@ -174,10 +181,14 @@ func (u *Utils) Copy_files(file_list []string, file_path string) {
 }
 
 /*
-create year, month and dates folders as necessary
-then paste the files in respective folders
+create year, month and dates folder tree as necessary ands
+then paste the files in their respective folders
 */
-func (u *Utils) Create_folders_and_copy_files(videos bool) error {
+func (u *Utils) Create_folders_and_copy_files(videos bool, start_time time.Time) error {
+	defer func() {
+		log.Debug().Msgf("Time Elapsed in copying files is %v", time.Since(start_time))
+	}()
+	
 	destination_path := u.Destination_path
 
 	for year_key, months := range u.Folder_tree {
@@ -196,12 +207,11 @@ func (u *Utils) Create_folders_and_copy_files(videos bool) error {
 				} else {
 					day_str_key = "0" + fmt.Sprintf("%d", day_key) + " " + month_str
 				}
+				
 				file_path := filepath.Join(destination_path, fmt.Sprintf("%d", year_key), month_str_key, day_str_key)
+				
 				if videos {
 					file_path = filepath.Join(file_path, "Videos")
-				}
-				if _, err := os.Stat(file_path); os.IsNotExist(err) {
-					os.MkdirAll(file_path, os.ModeDir)
 				}
 				
 				u.WaitGroupVar.Add(1)
