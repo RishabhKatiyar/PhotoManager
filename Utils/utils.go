@@ -8,9 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"errors"
 
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
+	"github.com/rs/zerolog/log"
 )
 
 type Months int
@@ -94,7 +96,7 @@ func (u *Utils) Get_folder_tree(list_of_files []string) (*map[int]map[int]map[in
 	for _, file_name := range list_of_files {
 		date_taken, err := u.get_date_taken(filepath.Join(file_name))
 		if err != nil {
-			fmt.Printf("Cannot Process file : %s because date taken not found, queueing them to process by name \n", file_name)
+			log.Error().Stack().Err(err).Msgf("Cannot Process file %s because date taken not found in exif, queueing them to process by name", file_name)
 			u.Failed_files = append(u.Failed_files, file_name)
 			continue
 		}
@@ -147,7 +149,8 @@ func (u *Utils) Get_folder_tree_with_name(list_of_files []string) (*map[int]map[
 				folder_tree[year][int(month)][day] = append(folder_tree[year][int(month)][day], file_name)
 			}
 		} else {
-			fmt.Printf("Cannot Process file : %s date time not present in file name, queueing them to fatal error.. \n", file_name)
+			err := errors.New("Cannot Process file")
+			log.Error().Stack().Err(err).Msgf("Date time not present in file name %s, queueing them to fatal files list", file_name)
 			u.Fatal_files = append(u.Fatal_files, file_name)
 		}
 	}
@@ -195,10 +198,10 @@ func (u *Utils) Create_folders_and_copy_files(videos bool) error {
 				for _, fileName := range file_list {
 					// copy the file to created or existing folder
 					dest := filepath.Join(file_path, filepath.Base(fileName))
-					fmt.Printf("Copying file .. %s to %s \n", fileName, dest)
+					log.Debug().Msgf("Copying file .. %s to %s \n", fileName, dest)
 					_, err := u.copy(fileName, dest)
 					if err != nil {
-						fmt.Println(err)
+						log.Error().Stack().Err(err).Msg("")
 					}
 				}
 			}
