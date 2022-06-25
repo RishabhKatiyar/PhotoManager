@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"errors"
+	"sync"
 
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
@@ -64,10 +65,11 @@ func (e Months) String() string {
 }
 
 type Utils struct {
-	Destination_path   string
-	Folder_tree        map[int]map[int]map[int][]string	
-	Failed_files []string
-	Fatal_files []string                      
+	Destination_path	string
+	Folder_tree        	map[int]map[int]map[int][]string	
+	Failed_files 		[]string
+	Fatal_files 		[]string   
+	WaitGroupVar 		*sync.WaitGroup                   
 }
 
 func (u *Utils) get_date_taken(file_path string) (time.Time, error) {
@@ -90,7 +92,7 @@ func (u *Utils) get_date_taken(file_path string) (time.Time, error) {
 /*
 populating the data structure which holds folder structure metadata
 */
-func (u *Utils) Get_folder_tree(list_of_files []string) (*map[int]map[int]map[int][]string, error) {
+func (u *Utils) Create_folder_tree(list_of_files []string) error {
 	folder_tree := make(map[int]map[int]map[int][]string)
 	
 	for _, file_name := range list_of_files {
@@ -118,10 +120,10 @@ func (u *Utils) Get_folder_tree(list_of_files []string) (*map[int]map[int]map[in
 		}
 	}
 	u.Folder_tree = folder_tree
-	return &u.Folder_tree, nil
+	return nil
 }
 
-func (u *Utils) Get_folder_tree_with_name(list_of_files []string) (*map[int]map[int]map[int][]string, error) {
+func (u *Utils) Create_folder_tree_with_name(list_of_files []string) error {
 	folder_tree := make(map[int]map[int]map[int][]string)
 
 	for _, file_name := range list_of_files {
@@ -155,7 +157,20 @@ func (u *Utils) Get_folder_tree_with_name(list_of_files []string) (*map[int]map[
 		}
 	}
 	u.Folder_tree = folder_tree
-	return &u.Folder_tree, nil
+	return nil
+}
+
+func (u *Utils) Copy_files(file_list []string, file_path string) {
+	defer u.WaitGroupVar.Done()
+	for _, fileName := range file_list {
+		// copy the file to created or existing folder
+		dest := filepath.Join(file_path, filepath.Base(fileName))
+		log.Debug().Msgf("Copying file .. %s to %s", fileName, dest)
+		_, err := u.copy(fileName, dest)
+		if err != nil {
+			log.Error().Stack().Err(err).Msg("")
+		}
+	}
 }
 
 /*
@@ -163,12 +178,6 @@ create year, month and dates folders as necessary
 then paste the files in respective folders
 */
 func (u *Utils) Create_folders_and_copy_files(videos bool) error {
-	//year := 2020
-	//month := 12
-	//day := 26
-	//u.Created_folders_list = make(map[time.Time]bool)
-	//key := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
-	//u.Created_folders_list[key] = true
 	destination_path := u.Destination_path
 
 	for year_key, months := range u.Folder_tree {
@@ -194,16 +203,9 @@ func (u *Utils) Create_folders_and_copy_files(videos bool) error {
 				if _, err := os.Stat(file_path); os.IsNotExist(err) {
 					os.MkdirAll(file_path, os.ModeDir)
 				}
-
-				for _, fileName := range file_list {
-					// copy the file to created or existing folder
-					dest := filepath.Join(file_path, filepath.Base(fileName))
-					log.Debug().Msgf("Copying file .. %s to %s \n", fileName, dest)
-					_, err := u.copy(fileName, dest)
-					if err != nil {
-						log.Error().Stack().Err(err).Msg("")
-					}
-				}
+				
+				u.WaitGroupVar.Add(1)
+				go u.Copy_files(file_list, file_path)
 			}
 		}
 	}
