@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	//source_path      = "D:\\dumpSource"
-	source_path      = ""
-	//destination_path = "D:\\dumpDest"
-	destination_path = ""
+	source_path      = "D:\\dumpSource"
+	//source_path      = ""
+	destination_path = "D:\\dumpDest"
+	//destination_path = ""
 
 	process_photos = true
 	process_videos = true
@@ -26,13 +26,14 @@ var (
 
 func main() {
 	
-	fmt.Println("Enter Source Path")
+	/*fmt.Println("Enter Source Path")
     fmt.Scanln(&source_path)
 
 	fmt.Println("Enter Destination Path")
-    fmt.Scanln(&destination_path)
+    fmt.Scanln(&destination_path)*/
 	
 	start := time.Now()
+
 	// UNIX Time is faster and smaller than most timestamps
 	//zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
@@ -67,60 +68,58 @@ func main() {
 	// wait for all go routines to complete
 	var wg sync.WaitGroup
 
-	util_object := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
-
+	
+	wg.Add(1)
 	// Photos
-	if process_photos {
-		var list_of_files []string
-		log.Debug().Msg("Processing photos with date metadata")
-		err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-			if filepath.Ext(path) == ".jpg" {
-				list_of_files = append(list_of_files, path)
-			}
-			return nil
-		})
-
-		if err != nil {
-			log.Error().Stack().Err(err).Msg("")
-		}
-
-		util_object.Create_folder_tree(list_of_files)
-		util_object.Create_folders_and_copy_files(false)
-
-		if len(util_object.Failed_files) > 0 {
-			log.Debug().Msg("Processing photos with file name")
-			util_object.Create_folder_tree_with_name(util_object.Failed_files)
-			util_object.Create_folders_and_copy_files(false)
-		}
-	}
-
-	// Videos
-	if process_videos {
-		var list_of_files []string
-		log.Debug().Msg("Processing photos with date metadata")
-		err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-			if filepath.Ext(path) == ".mp4" {
-				list_of_files = append(list_of_files, path)
-			}
-			return nil
-		})
+	// Passing same wg pointer to wait for copy go routines to finish
+	util_object_photos := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
+	go func () {
+		defer wg.Done()
 		
-		if err != nil {
-			log.Error().Stack().Err(err).Msg("")
+		if process_photos {
+			var list_of_files []string
+			log.Debug().Msg("Reading Photos..")
+			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
+				if filepath.Ext(path) == ".jpg" {
+					list_of_files = append(list_of_files, path)
+				}
+				return nil
+			})
+
+			if err != nil {
+				log.Error().Stack().Err(err).Msg("")
+			}
+
+			util_object_photos.Create_folder_tree(list_of_files, false, time.Now())
+			util_object_photos.Create_folders_and_copy_files(false, time.Now())
 		}
+	}()
 
-		log.Debug().Msg("Processing videos with file name")
-		util_object.Create_folder_tree_with_name(list_of_files)
-		util_object.Create_folders_and_copy_files(true)
-	}
+	wg.Add(1)
+	// Videos
+	// Passing same wg pointer to wait for copy go routines to finish
+	util_object_videos := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
+	go func () {
+		defer wg.Done()
+		
+		if process_videos {
+			var list_of_files []string
+			log.Debug().Msg("Reading Videos..")
+			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
+				if filepath.Ext(path) == ".mp4" {
+					list_of_files = append(list_of_files, path)
+				}
+				return nil
+			})
+			
+			if err != nil {
+				log.Error().Stack().Err(err).Msg("")
+			}
 
-	// Disply Fatal files list
-	if len(util_object.Fatal_files) > 0 {
-		err := errors.New("Could not process files")
-		log.Error().Stack().Err(err).Msgf("%v", util_object.Fatal_files)
-	} else {
-		log.Debug().Msg("Success!")
-	}
+			util_object_videos.Create_folder_tree(list_of_files, true, time.Now())
+			util_object_videos.Create_folders_and_copy_files(true, time.Now())
+		}
+	}()
 	
 	//
 	// wait here till all copying go routines have completed
@@ -128,10 +127,23 @@ func main() {
 	fmt.Printf("\n\nWait till copying of files is in progress..\n\n")
 	wg.Wait()
 
+	// Disply Fatal files list
+	if len(util_object_photos.Fatal_files) > 0 {
+		err := errors.New("Could not process files")
+		log.Error().Stack().Err(err).Msgf("%v", util_object_photos.Fatal_files)
+	}
+
+	// Disply Fatal files list
+	if len(util_object_videos.Fatal_files) > 0 {
+		err := errors.New("Could not process files")
+		log.Error().Stack().Err(err).Msgf("%v", util_object_videos.Fatal_files)
+	} else {
+		log.Debug().Msg("Success!")
+	}
 
 	log.Debug().Msgf("Time Taken = %v", time.Since(start))
 
-	fmt.Println("You can exit application now..")
+	fmt.Println("You can exit the application now..")
 	exitInput := ""
 	fmt.Scanln(&exitInput)
 }
