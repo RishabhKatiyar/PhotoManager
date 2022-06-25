@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	source_path      = "D:\\dumpSource"
-	//source_path      = ""
-	destination_path = "D:\\dumpDest"
-	//destination_path = ""
+	//source_path      = "D:\\dumpSource"
+	source_path      = ""
+	//destination_path = "D:\\dumpDest"
+	destination_path = ""
 
 	process_photos = true
 	process_videos = true
@@ -26,11 +26,11 @@ var (
 
 func main() {
 	
-	/*fmt.Println("Enter Source Path")
+	fmt.Println("Enter Source Path")
     fmt.Scanln(&source_path)
 
 	fmt.Println("Enter Destination Path")
-    fmt.Scanln(&destination_path)*/
+    fmt.Scanln(&destination_path)
 	
 	start := time.Now()
 
