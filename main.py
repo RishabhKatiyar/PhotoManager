@@ -1,149 +1,53 @@
-package main
+# This is a Python script to arrange photos according to date taken,
+# user needs to set
+# 1. source_path where photos are dumped at from an external storage device
+# 2. destination_path where photos will be copied to
 
-import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"time"
-	"errors"
-	"sync"
+import glob
+import os
+from utils import *
 
-	"github.com/RishabhKatiyar/PhotoManager/utils"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/rs/zerolog/pkgerrors"
-)
 
-var (
-	//source_path      = "D:\\dumpSource"
-	source_path      = ""
-	//destination_path = "D:\\dumpDest"
-	destination_path = ""
+# to be set by user
+#source_path = "D:\\dump"
+source_path = "D:\\dumpSource"
+#destination_path = "D:\\Pictures\\Pictures\\1. Home"
+destination_path = "D:\\dumpDest"
 
-	process_photos = true
-	process_videos = true
-)
+process_photos = True
+process_videos = True
 
-func main() {
-	
-	fmt.Println("Enter Source Path")
-    fmt.Scanln(&source_path)
 
-	fmt.Println("Enter Destination Path")
-    fmt.Scanln(&destination_path)
-	
-	start := time.Now()
+if __name__ == '__main__':
+    # os.chdir is necessary to run glob.glbob method
+    os.chdir(source_path)
 
-	// UNIX Time is faster and smaller than most timestamps
-	//zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-	//Set log level
-	//log_level := os.Getenv("LOG_LEVEL")
-	log_level := "debug"
-	switch {
-	case log_level == "debug":
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case log_level == "info":
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	case log_level == "warn":
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case log_level == "error":
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	case log_level == "fatal":
-		zerolog.SetGlobalLevel(zerolog.FatalLevel)
-	case log_level == "panic":
-		zerolog.SetGlobalLevel(zerolog.PanicLevel)
-	case log_level == "no":
-		zerolog.SetGlobalLevel(zerolog.NoLevel)
-	case log_level == "disabled":
-		zerolog.SetGlobalLevel(zerolog.Disabled)
-	case log_level == "trace":
-		zerolog.SetGlobalLevel(zerolog.TraceLevel)
-	default:
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	}
-	// Log a human-friendly, colorized output
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+    util_object = Util()
+    util_object.source_path = source_path
+    util_object.destination_path = destination_path
 
-	// wait for all go routines to complete
-	var wg sync.WaitGroup
+    # Photos ...
+    if process_photos:
+        list_of_files = glob.glob("*.jpg")
+        print(f'Processing photos with date metadata')
+        util_object.get_folder_tree(list_of_files)
+        util_object.create_folders_and_copy_files()
 
-	
-	wg.Add(1)
-	// Photos
-	// Passing same wg pointer to wait for copy go routines to finish
-	util_object_photos := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
-	go func () {
-		defer wg.Done()
-		
-		if process_photos {
-			var list_of_files []string
-			log.Debug().Msg("Reading Photos..")
-			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-				if filepath.Ext(path) == ".jpg" || filepath.Ext(path) == ".JPG"  {
-					list_of_files = append(list_of_files, path)
-				}
-				return nil
-			})
+        if len(util_object.failed_files):
+            print(f'Processing photos with file name')
+            util_object.get_folder_tree_with_name(util_object.failed_files)
+            util_object.create_folders_and_copy_files()
 
-			if err != nil {
-				log.Error().Stack().Err(err).Msg("")
-			}
+    # Videos ...
+    if process_videos:
+        list_of_files = glob.glob("*.mp4")
+        
+        print(f'Processing videos with file name')
+        util_object.get_folder_tree_with_name(list_of_files)
+        util_object.create_folders_and_copy_files(videos=True)
 
-			util_object_photos.Create_folder_tree(list_of_files, true, time.Now())
-			util_object_photos.Create_folders_and_copy_files(false, time.Now())
-		}
-	}()
-
-	wg.Add(1)
-	// Videos
-	// Passing same wg pointer to wait for copy go routines to finish
-	util_object_videos := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
-	go func () {
-		defer wg.Done()
-		
-		if process_videos {
-			var list_of_files []string
-			log.Debug().Msg("Reading Videos..")
-			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-				if filepath.Ext(path) == ".mp4" || filepath.Ext(path) == ".MP4" {
-					list_of_files = append(list_of_files, path)
-				}
-				return nil
-			})
-			
-			if err != nil {
-				log.Error().Stack().Err(err).Msg("")
-			}
-
-			util_object_videos.Create_folder_tree(list_of_files, true, time.Now())
-			util_object_videos.Create_folders_and_copy_files(true, time.Now())
-		}
-	}()
-	
-	//
-	// wait here till all copying go routines have completed
-	//
-	fmt.Printf("\n\nWait till copying of files is in progress..\n\n")
-	wg.Wait()
-
-	// Disply Fatal files list
-	if len(util_object_photos.Fatal_files) > 0 {
-		err := errors.New("Could not process files")
-		log.Error().Stack().Err(err).Msgf("%v", util_object_photos.Fatal_files)
-	}
-
-	// Disply Fatal files list
-	if len(util_object_videos.Fatal_files) > 0 {
-		err := errors.New("Could not process files")
-		log.Error().Stack().Err(err).Msgf("%v", util_object_videos.Fatal_files)
-	} else {
-		log.Debug().Msg("Success!")
-	}
-
-	log.Debug().Msgf("Time Taken = %v", time.Since(start))
-
-	fmt.Println("You can exit the application now..")
-	exitInput := ""
-	fmt.Scanln(&exitInput)
-}
+    if len(util_object.fatal_files):
+        print(f'Could not process - ')
+        print(util_object.fatal_files)
+    else:
+        print(f'Success..')
