@@ -90,7 +90,7 @@ func main() {
 				log.Error().Stack().Err(err).Msg("")
 			}
 
-			util_object_photos.Create_folder_tree(list_of_files, false, time.Now())
+			util_object_photos.Create_folder_tree(list_of_files, true, time.Now())
 			util_object_photos.Create_folders_and_copy_files(false, time.Now())
 		}
 	}()
