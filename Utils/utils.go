@@ -150,17 +150,21 @@ func (u *Utils) Create_folder_tree(list_of_files []string, calculate_date_taken_
 		if calculate_date_taken_from_file_name {
 			year, month, day, err = u.get_date_taken_from_file_name(file_name)
 			if err != nil {			
-				log.Error().Stack().Err(err).Msgf("Date time not present in file name %s, queueing them to fatal files list", file_name)
-				u.Fatal_files = append(u.Fatal_files, file_name)
-				continue
+				log.Error().Stack().Err(err).Msgf("Date taken not present in file name %s, trying with exif info", file_name)
+				year, month, day, err = u.get_date_taken_from_exif(filepath.Join(file_name))
+				if err != nil {			
+					log.Error().Stack().Err(err).Msgf("Date taken not present in exif of file %s, queueing them to fatal files list", file_name)
+					u.Fatal_files = append(u.Fatal_files, file_name)
+					continue
+				}
 			}		
 		} else {
 			year, month, day, err = u.get_date_taken_from_exif(filepath.Join(file_name))
 			if err != nil {
-				log.Error().Stack().Err(err).Msgf("Date taken not found in exif for file %s, trying with file name", file_name)
+				log.Error().Stack().Err(err).Msgf("Date taken not found in exif of file %s, trying with file name", file_name)
 				year, month, day, err = u.get_date_taken_from_file_name(file_name)
 				if err != nil {			
-					log.Error().Stack().Err(err).Msgf("Date time not present in file name %s, queueing them to fatal files list", file_name)
+					log.Error().Stack().Err(err).Msgf("Date taken not present in file name %s, queueing them to fatal files list", file_name)
 					u.Fatal_files = append(u.Fatal_files, file_name)
 					continue
 				}
