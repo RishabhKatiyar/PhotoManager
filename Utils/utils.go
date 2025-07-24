@@ -1,19 +1,19 @@
 package utils
 
-import (	
+import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"errors"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
-	"github.com/rs/zerolog/log"
 )
 
 type Months int
@@ -65,10 +65,10 @@ func (e Months) String() string {
 }
 
 type Utils struct {
-	Destination_path	string
-	Folder_tree        	map[int]map[int]map[int][]string	
-	Fatal_files 		[]string   
-	WaitGroupVar 		*sync.WaitGroup                   
+	Destination_path string
+	Folder_tree      map[int]map[int]map[int][]string
+	Fatal_files      []string
+	WaitGroupVar     *sync.WaitGroup
 }
 
 func (u *Utils) InValidDate(year, month, day int) bool {
@@ -81,14 +81,14 @@ func (u *Utils) get_date_taken_from_exif(file_path string) (int, int, int, error
 	year, month, day := 0, 0, 0
 	f, err := os.Open(file_path)
 	if err != nil {
-			return year, month, day, err
-		}
+		return year, month, day, err
+	}
 	exif.RegisterParsers(mknote.All...)
 
 	x, err := exif.Decode(f)
 	if err != nil {
-			return year, month, day, err
-		}
+		return year, month, day, err
+	}
 
 	date_taken, err := x.DateTime()
 	year = date_taken.Year()
@@ -106,22 +106,29 @@ func (u *Utils) get_date_taken_from_file_name(file_name string) (int, int, int, 
 	if idx < 0 {
 		idx = strings.Index(fileBaseName, "_")
 	}
-	if idx == 3 {
+	if idx < 0 {
+		idx = 2
+	}
+	if idx == 2 {
+		year, _ = strconv.Atoi(fileBaseName[idx+1 : idx+5])
+		month, _ = strconv.Atoi(fileBaseName[idx+5 : idx+7])
+		day, _ = strconv.Atoi(fileBaseName[idx+7 : idx+9])
+	} else if idx == 3 {
 		year, _ = strconv.Atoi(fileBaseName[idx+1 : idx+5])
 		month, _ = strconv.Atoi(fileBaseName[idx+5 : idx+7])
 		day, _ = strconv.Atoi(fileBaseName[idx+7 : idx+9])
 	} else {
-		year, err = strconv.Atoi(fileBaseName[0 : 4])
+		year, err = strconv.Atoi(fileBaseName[0:4])
 		if err != nil {
-			err = errors.New("Cannot get date taken from file name")
+			err = errors.New("cannot get date taken from file name")
 		} else {
-			month, err = strconv.Atoi(fileBaseName[4 : 6])
+			month, err = strconv.Atoi(fileBaseName[4:6])
 			if err != nil {
-				err = errors.New("Cannot get date taken from file name")
+				err = errors.New("cannot get date taken from file name")
 			} else {
-				day, err = strconv.Atoi(fileBaseName[6 : 8])
+				day, err = strconv.Atoi(fileBaseName[6:8])
 				if err != nil {
-					err = errors.New("Cannot get date taken from file name")
+					err = errors.New("cannot get date taken from file name")
 				}
 			}
 		}
@@ -130,10 +137,10 @@ func (u *Utils) get_date_taken_from_file_name(file_name string) (int, int, int, 
 	if u.InValidDate(year, month, day) {
 		err = errors.New("Cannot get date taken from file name")
 	}
-	
+
 	return year, month, day, err
 }
-	
+
 /*
 populate the data structure which holds folder tree metadata
 */
@@ -143,27 +150,27 @@ func (u *Utils) Create_folder_tree(list_of_files []string, calculate_date_taken_
 	}()
 
 	folder_tree := make(map[int]map[int]map[int][]string)
-	
+
 	for _, file_name := range list_of_files {
 		year, month, day := 0, 0, 0
 		var err error
 		if calculate_date_taken_from_file_name {
 			year, month, day, err = u.get_date_taken_from_file_name(file_name)
-			if err != nil {			
+			if err != nil {
 				log.Error().Stack().Err(err).Msgf("Date taken not present in file name %s, trying with exif info", file_name)
 				year, month, day, err = u.get_date_taken_from_exif(filepath.Join(file_name))
-				if err != nil {			
+				if err != nil {
 					log.Error().Stack().Err(err).Msgf("Date taken not present in exif of file %s, queueing them to fatal files list", file_name)
 					u.Fatal_files = append(u.Fatal_files, file_name)
 					continue
 				}
-			}		
+			}
 		} else {
 			year, month, day, err = u.get_date_taken_from_exif(filepath.Join(file_name))
 			if err != nil {
 				log.Error().Stack().Err(err).Msgf("Date taken not found in exif of file %s, trying with file name", file_name)
 				year, month, day, err = u.get_date_taken_from_file_name(file_name)
-				if err != nil {			
+				if err != nil {
 					log.Error().Stack().Err(err).Msgf("Date taken not present in file name %s, queueing them to fatal files list", file_name)
 					u.Fatal_files = append(u.Fatal_files, file_name)
 					continue
@@ -234,15 +241,15 @@ func (u *Utils) Create_folders_and_copy_files(videos bool, start_time time.Time)
 				} else {
 					day_str_key = "0" + fmt.Sprintf("%d", day_key) + " " + month_str
 				}
-				
+
 				file_path := filepath.Join(destination_path, fmt.Sprintf("%d", year_key), month_str_key, day_str_key)
-				
+
 				if videos {
 					file_path = filepath.Join(file_path, "Videos")
 				} else {
 					file_path = filepath.Join(file_path, "Photos")
 				}
-				
+
 				u.WaitGroupVar.Add(1)
 				go u.Copy_files(file_list, file_path)
 			}
