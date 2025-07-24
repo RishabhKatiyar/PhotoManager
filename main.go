@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
-	"errors"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/RishabhKatiyar/PhotoManager/utils"
 	"github.com/rs/zerolog"
@@ -16,7 +18,7 @@ import (
 
 var (
 	//source_path      = "D:\\dumpSource"
-	source_path      = ""
+	source_path = ""
 	//destination_path = "D:\\dumpDest"
 	destination_path = ""
 
@@ -25,13 +27,17 @@ var (
 )
 
 func main() {
-	
-	fmt.Println("Enter Source Path")
-    fmt.Scanln(&source_path)
+
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Enter Source Path: ")
+	source_path, _ := reader.ReadString('\n')
+	source_path = strings.TrimSpace(source_path)
 
 	fmt.Println("Enter Destination Path")
-    fmt.Scanln(&destination_path)
-	
+	destination_path, _ := reader.ReadString('\n')
+	destination_path = strings.TrimSpace(destination_path)
+
 	start := time.Now()
 
 	// UNIX Time is faster and smaller than most timestamps
@@ -68,19 +74,18 @@ func main() {
 	// wait for all go routines to complete
 	var wg sync.WaitGroup
 
-	
 	wg.Add(1)
 	// Photos
 	// Passing same wg pointer to wait for copy go routines to finish
-	util_object_photos := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
-	go func () {
+	util_object_photos := utils.Utils{Destination_path: destination_path, WaitGroupVar: &wg}
+	go func() {
 		defer wg.Done()
-		
+
 		if process_photos {
 			var list_of_files []string
 			log.Debug().Msg("Reading Photos..")
 			err := filepath.Walk(source_path, func(path string, info os.FileInfo, err error) error {
-				if filepath.Ext(path) == ".jpg" || filepath.Ext(path) == ".JPG"  {
+				if filepath.Ext(path) == ".jpg" || filepath.Ext(path) == ".JPG" {
 					list_of_files = append(list_of_files, path)
 				}
 				return nil
@@ -98,10 +103,10 @@ func main() {
 	wg.Add(1)
 	// Videos
 	// Passing same wg pointer to wait for copy go routines to finish
-	util_object_videos := utils.Utils{Destination_path: destination_path, WaitGroupVar : &wg}
-	go func () {
+	util_object_videos := utils.Utils{Destination_path: destination_path, WaitGroupVar: &wg}
+	go func() {
 		defer wg.Done()
-		
+
 		if process_videos {
 			var list_of_files []string
 			log.Debug().Msg("Reading Videos..")
@@ -111,7 +116,7 @@ func main() {
 				}
 				return nil
 			})
-			
+
 			if err != nil {
 				log.Error().Stack().Err(err).Msg("")
 			}
@@ -120,7 +125,7 @@ func main() {
 			util_object_videos.Create_folders_and_copy_files(true, time.Now())
 		}
 	}()
-	
+
 	//
 	// wait here till all copying go routines have completed
 	//
@@ -129,13 +134,13 @@ func main() {
 
 	// Disply Fatal files list
 	if len(util_object_photos.Fatal_files) > 0 {
-		err := errors.New("Could not process files")
+		err := errors.New("could not process files")
 		log.Error().Stack().Err(err).Msgf("%v", util_object_photos.Fatal_files)
 	}
 
 	// Disply Fatal files list
 	if len(util_object_videos.Fatal_files) > 0 {
-		err := errors.New("Could not process files")
+		err := errors.New("could not process files")
 		log.Error().Stack().Err(err).Msgf("%v", util_object_videos.Fatal_files)
 	} else {
 		log.Debug().Msg("Success!")
